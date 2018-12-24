@@ -4,7 +4,7 @@ extern crate feed_rs;
 extern crate tempfile;
 
 use std::thread;
-use std::io::copy;
+//use std::io::copy;
 use std::fs::File;
 
 fn main() {
@@ -25,34 +25,41 @@ fn hacker_news(url: &str) {
 
     } */
 
-    let mp3s : Vec<_> = parsed.entries
+    let mp3s : Vec<String> = parsed.entries
         .into_iter()
         .map(|e| e.enclosure[0].href.clone())
         .collect();
 
     let handler = thread::spawn(move || {
-        fetch_mp3();
+        fetch_mp3(mp3s);
           
     });
 
     handler.join().unwrap();
 }
 
-fn fetch_mp3() -> Result<_> {
+fn internal_fetch(mp3s : Vec<String>) -> std::io::Result<(String, File)> {
     let dir = tempfile::tempdir()?;
-        let mut response = reqwest::get(&mp3s[0]).unwrap();
-        assert!(response.status().is_success());
+    let mut response = reqwest::get(&mp3s[0]).unwrap();
+    assert!(response.status().is_success());
 
-        let fname = response
+    let fname = { 
+        dir.path().join(
+            response
                 .url()
                 .path_segments()
                 .and_then(|segments| segments.last())
                 .and_then(|name| if name.is_empty() { None } else { Some(name) })
-                .unwrap_or("tmp.bin");
-        let fname = dir.path().join(fname);
-      /*   let mut f = match File::create(fname){
-            
-        }
+                .unwrap_or("tmp.mp3"))
+    };
+    
+    match File::create(fname) {
+        Ok(f) => return Ok((response.text().unwrap(), f)),
+        Err(err)  => return Err(err),
+    }
+}
 
-        std::io::copy(&mut response, &mut dest); */
+fn fetch_mp3(mp3s : Vec<String>) {
+    internal_fetch(mp3s);
+    //std::io::copy(&mut response, &mut dest);
 }
