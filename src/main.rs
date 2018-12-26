@@ -4,8 +4,8 @@ extern crate feed_rs;
 extern crate tempfile;
 
 use std::thread;
-//use std::io::copy;
 use std::fs::File;
+use std::io::Result;
 
 fn main() {
     hacker_news("http://feeds.nightvalepresents.com/welcometonightvalepodcast");
@@ -38,7 +38,7 @@ fn hacker_news(url: &str) {
     handler.join().unwrap();
 }
 
-fn internal_fetch(mp3s : Vec<String>) -> std::io::Result<(String, File)> {
+fn internal_fetch(mp3s : Vec<String>) -> Result<u64> {
     let dir = tempfile::tempdir()?;
     let mut response = reqwest::get(&mp3s[0]).unwrap();
     assert!(response.status().is_success());
@@ -53,13 +53,12 @@ fn internal_fetch(mp3s : Vec<String>) -> std::io::Result<(String, File)> {
                 .unwrap_or("tmp.mp3"))
     };
     
-    match File::create(fname) {
-        Ok(f) => return Ok((response.text().unwrap(), f)),
-        Err(err)  => return Err(err),
-    }
+    println!("File name: {}", fname.to_str().unwrap());
+    let mut f = File::create(fname)?;
+    let bytes_written : u64 = response.copy_to(&mut f).unwrap();
+    Ok(bytes_written)
 }
 
 fn fetch_mp3(mp3s : Vec<String>) {
-    internal_fetch(mp3s);
-    //std::io::copy(&mut response, &mut dest);
+    let _u = internal_fetch(mp3s).unwrap();
 }
