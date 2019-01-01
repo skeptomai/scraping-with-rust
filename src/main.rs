@@ -78,9 +78,10 @@ fn get_file_name(response: &reqwest::Response) -> Result<(tempfile::TempDir, Str
         .and_then(|name| if name.is_empty() { None } else { Some(name) })
         .unwrap_or("tmp.mp3");
 
-    let fname = dir.path().join(local_name).to_str().unwrap().to_string();
-    println!("fname is {:#}", fname);
-    Ok((dir, fname))
+    match dir.path().join(local_name).to_str() {
+        Some(f) => Ok((dir, f.to_string())),
+        None => Err(Error::new(ErrorKind::Other, "Failed to get filename")),
+    }
 }
 
 fn fcreate(fname: &str) -> Result<std::fs::File> {
@@ -102,7 +103,7 @@ impl MP3ToFetch {
             Ok(mut response) => {
                 let (_tempdir, fname) = get_file_name(&response)?;
                 println!("internal_fetch would write {}", fname);
-                let mut f = fcreate(fname.as_str()).unwrap();
+                let mut f = fcreate(fname.as_str())?;
                 println!("f is {:#?}", f);
 
                 let bytes_written: u64 = match response.copy_to(&mut f) {
