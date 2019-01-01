@@ -75,13 +75,15 @@ fn get_file_name(response: &reqwest::Response) -> Result<(tempfile::TempDir, Str
         .url()
         .path_segments()
         .and_then(|segments| segments.last())
-        .and_then(|name| if name.is_empty() { None } else { Some(name) })
-        .unwrap_or("tmp.mp3");
+        .and_then(|name| if name.is_empty() { None } else { Some(name) });
 
-    match dir.path().join(local_name).to_str() {
-        Some(f) => Ok((dir, f.to_string())),
-        None => Err(Error::new(ErrorKind::Other, "Failed to get filename")),
-    }
+    if let Some(name) = local_name {
+        if let Some(f) = dir.path().join(name).to_str() {
+            return Ok((dir, f.to_string()))
+        }
+    } 
+        
+    Err(Error::new(ErrorKind::Other, "Failed to get filename"))
 }
 
 fn fcreate(fname: &str) -> Result<std::fs::File> {
