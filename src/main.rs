@@ -1,16 +1,29 @@
 extern crate feed_rs;
 extern crate num_cpus;
 extern crate reqwest;
+extern crate scoped_threadpool;
 extern crate select;
 extern crate tempfile;
 
+use scoped_threadpool::Pool;
 use std::fs::File;
 use std::io::{Error, ErrorKind, Result};
-use std::thread;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 struct MP3ToFetch {
     mp3_url: String,
+}
+
+impl MP3ToFetch {
+    fn fetch_mp3(&self) {
+        match self.internal_fetch() {
+            Ok(bytes_written) => println!("Wrote: {}", bytes_written),
+            Err(e) => {
+                println!("Cypress Hill, ya'll fucked up! : {:#?}", e);
+                std::process::exit(-1)
+            }
+        }
+    }
 }
 
 fn main() {
@@ -43,13 +56,17 @@ fn hacker_news(url: &str) {
         })
         .collect();
 
-    println!("{}", num_cpus::get());
+    let cpus = num_cpus::get();
 
-    let handler = thread::spawn(move || {
-        fetch_mp3(mp3s);
-    });
+    let mut pool = Pool::new(cpus as u32);
 
-    handler.join().unwrap();
+    pool.scoped(|scoped| {
+        for mp3 in mp3s {
+            scoped.execute(move || {
+                mp3.fetch_mp3();
+            })
+        }
+    })
 }
 
 fn get_file_name(response: &reqwest::Response) -> Result<(tempfile::TempDir, String)> {
@@ -66,45 +83,41 @@ fn get_file_name(response: &reqwest::Response) -> Result<(tempfile::TempDir, Str
     Ok((dir, fname))
 }
 
-fn internal_fetch(mp3: &str) -> Result<u64> {
-    println!("internal_fetch would fetch {}", mp3);
-
-    match reqwest::get(mp3) {
-        Ok(mut response) => {
-            let (_tempdir, fname) = get_file_name(&response)?;
-            println!("internal_fetch would write {}", fname);
-            let mut f = match File::create(fname) {
-                Ok(f) => f,
-                Err(e) => {
-                    println!("File::create failed {:#?}", e);
-                    return Err(Error::new(ErrorKind::Other, e));
-                }
-            };
-            println!("f is {:#?}", f);
-            let bytes_written: u64 = match response.copy_to(&mut f) {
-                Ok(f) => f,
-                Err(e) => {
-                    println!("copy_to failed {:#?}", e);
-                    return Err(Error::new(ErrorKind::Other, e));
-                }
-            };
-            println!("Wrote {:#} bytes", bytes_written);
-            Ok(bytes_written)
-        }
+fn fcreate(fname: &str) -> Result<std::fs::File> {
+    match File::create(fname) {
+        Ok(f) => Ok(f),
         Err(e) => {
-            println!("internal_fetch failed: {:#?}", e);
+            println!("File::create failed {:#?}", e);
             return Err(Error::new(ErrorKind::Other, e));
         }
     }
 }
 
-fn fetch_mp3(mp3s: Vec<MP3ToFetch>) {
-    for mp3 in mp3s {
-        match internal_fetch(&mp3.mp3_url) {
-            Ok(bytes_written) => println!("Wrote: {}", bytes_written),
+impl MP3ToFetch {
+    fn internal_fetch(&self) -> Result<u64> {
+        let mp3 = self.mp3_url.clone();
+        println!("internal_fetch would fetch {}", mp3);
+
+        match reqwest::get(mp3.as_str()) {
+            Ok(mut response) => {
+                let (_tempdir, fname) = get_file_name(&response)?;
+                println!("internal_fetch would write {}", fname);
+                let mut f = fcreate(fname.as_str()).unwrap();
+                println!("f is {:#?}", f);
+
+                let bytes_written: u64 = match response.copy_to(&mut f) {
+                    Ok(f) => f,
+                    Err(e) => {
+                        println!("copy_to failed {:#?}", e);
+                        return Err(Error::new(ErrorKind::Other, e));
+                    }
+                };
+                println!("Wrote {:#} bytes", bytes_written);
+                Ok(bytes_written)
+            }
             Err(e) => {
-                println!("Cypress Hill, ya'll fucked up! : {:#?}", e);
-                std::process::exit(-1)
+                println!("internal_fetch failed: {:#?}", e);
+                return Err(Error::new(ErrorKind::Other, e));
             }
         }
     }
