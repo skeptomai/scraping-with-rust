@@ -8,9 +8,12 @@ extern crate tempfile;
 use scoped_threadpool::Pool;
 use std::fs::File;
 use std::io::{Error, ErrorKind, Result};
+use std::sync::Arc;
+use tempfile::TempDir;
 
 #[derive(Debug, Clone)]
 struct MP3ToFetch {
+    mp3_dir: std::sync::Arc<TempDir>,
     mp3_url: String,
 }
 
@@ -31,7 +34,7 @@ impl MP3ToFetch {
 
         match reqwest::get(mp3.as_str()) {
             Ok(mut response) => {
-                let (_tempdir, fname) = self.get_file_name(&response)?;
+                let fname = self.get_file_name(&response)?;
                 println!("internal_fetch would write {}", fname);
                 let mut f = File::create(fname.as_str())?;
                 println!("f is {:#?}", f);
@@ -53,8 +56,7 @@ impl MP3ToFetch {
         }
     }
 
-    fn get_file_name(&self, response: &reqwest::Response) -> Result<(tempfile::TempDir, String)> {
-        let dir = tempfile::tempdir()?;
+    fn get_file_name(&self, response: &reqwest::Response) -> Result<String> {
         let local_name = response
             .url()
             .path_segments()
@@ -62,8 +64,8 @@ impl MP3ToFetch {
             .and_then(|name| if name.is_empty() { None } else { Some(name) });
 
         if let Some(name) = local_name {
-            if let Some(f) = dir.path().join(name).to_str() {
-                return Ok((dir, f.to_string()));
+            if let Some(f) = self.mp3_dir.path().join(name).to_str() {
+                return Ok(f.to_string());
             }
         }
 
@@ -79,6 +81,7 @@ fn hacker_news(url: &str) {
     let mut resp = reqwest::get(url).unwrap();
     assert!(resp.status().is_success());
     let parsed = feed_rs::parser::parse(&mut resp).unwrap();
+    let dir = Arc::new(tempfile::TempDir::new().unwrap());
     /*
     println!(
         "title: {:#?}, number of entries: {}, description: {:#?}",
@@ -96,8 +99,12 @@ fn hacker_news(url: &str) {
     let mp3s: Vec<MP3ToFetch> = parsed
         .entries
         .into_iter()
-        .map(|e| MP3ToFetch {
-            mp3_url: e.enclosure[0].href.clone(),
+        .map(|e| {
+            let tdir = dir.clone();
+            MP3ToFetch {
+                mp3_dir: tdir,
+                mp3_url: e.enclosure[0].href.clone(),
+            }
         })
         .collect();
 
