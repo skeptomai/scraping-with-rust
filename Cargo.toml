@@ -1,7 +1,7 @@
 [package]
-name = "rusty_hacker"
+name = "nightscrape"
 version = "0.1.0"
-authors = ["kade killary <kadekillary@protonmail.com>"]
+authors = ["Christopher Brown <cb@skeptomai.com>"]
 
 [dependencies]
 reqwest = "*"
@@ -15,3 +15,4 @@ atom_syndication="*"
 tempfile="*"
 num_cpus="*"
 scoped_threadpool="*"
+cssparser="0.27"

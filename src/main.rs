@@ -15,7 +15,7 @@ struct MP3ToFetch {
 }
 
 impl MP3ToFetch {
-    fn fetch_mp3(&self) {
+    pub fn fetch_mp3(&self) {
         match self.internal_fetch() {
             Ok(bytes_written) => println!("Wrote: {}", bytes_written),
             Err(e) => {
@@ -23,6 +23,51 @@ impl MP3ToFetch {
                 std::process::exit(-1)
             }
         }
+    }
+
+    fn internal_fetch(&self) -> Result<u64> {
+        let mp3 = self.mp3_url.clone();
+        println!("internal_fetch would fetch {}", mp3);
+
+        match reqwest::get(mp3.as_str()) {
+            Ok(mut response) => {
+                let (_tempdir, fname) = self.get_file_name(&response)?;
+                println!("internal_fetch would write {}", fname);
+                let mut f = File::create(fname.as_str())?;
+                println!("f is {:#?}", f);
+
+                let bytes_written: u64 = match response.copy_to(&mut f) {
+                    Ok(f) => f,
+                    Err(e) => {
+                        println!("copy_to failed {:#?}", e);
+                        return Err(Error::new(ErrorKind::Other, e));
+                    }
+                };
+                println!("Wrote {:#} bytes", bytes_written);
+                Ok(bytes_written)
+            }
+            Err(e) => {
+                println!("internal_fetch failed: {:#?}", e);
+                return Err(Error::new(ErrorKind::Other, e));
+            }
+        }
+    }
+
+    fn get_file_name(&self, response: &reqwest::Response) -> Result<(tempfile::TempDir, String)> {
+        let dir = tempfile::tempdir()?;
+        let local_name = response
+            .url()
+            .path_segments()
+            .and_then(|segments| segments.last())
+            .and_then(|name| if name.is_empty() { None } else { Some(name) });
+
+        if let Some(name) = local_name {
+            if let Some(f) = dir.path().join(name).to_str() {
+                return Ok((dir, f.to_string()));
+            }
+        }
+
+        Err(Error::new(ErrorKind::Other, "Failed to get filename"))
     }
 }
 
@@ -67,61 +112,4 @@ fn hacker_news(url: &str) {
             })
         }
     })
-}
-
-fn get_file_name(response: &reqwest::Response) -> Result<(tempfile::TempDir, String)> {
-    let dir = tempfile::tempdir()?;
-    let local_name = response
-        .url()
-        .path_segments()
-        .and_then(|segments| segments.last())
-        .and_then(|name| if name.is_empty() { None } else { Some(name) });
-
-    if let Some(name) = local_name {
-        if let Some(f) = dir.path().join(name).to_str() {
-            return Ok((dir, f.to_string()))
-        }
-    } 
-        
-    Err(Error::new(ErrorKind::Other, "Failed to get filename"))
-}
-
-fn fcreate(fname: &str) -> Result<std::fs::File> {
-    match File::create(fname) {
-        Ok(f) => Ok(f),
-        Err(e) => {
-            println!("File::create failed {:#?}", e);
-            return Err(Error::new(ErrorKind::Other, e));
-        }
-    }
-}
-
-impl MP3ToFetch {
-    fn internal_fetch(&self) -> Result<u64> {
-        let mp3 = self.mp3_url.clone();
-        println!("internal_fetch would fetch {}", mp3);
-
-        match reqwest::get(mp3.as_str()) {
-            Ok(mut response) => {
-                let (_tempdir, fname) = get_file_name(&response)?;
-                println!("internal_fetch would write {}", fname);
-                let mut f = fcreate(fname.as_str())?;
-                println!("f is {:#?}", f);
-
-                let bytes_written: u64 = match response.copy_to(&mut f) {
-                    Ok(f) => f,
-                    Err(e) => {
-                        println!("copy_to failed {:#?}", e);
-                        return Err(Error::new(ErrorKind::Other, e));
-                    }
-                };
-                println!("Wrote {:#} bytes", bytes_written);
-                Ok(bytes_written)
-            }
-            Err(e) => {
-                println!("internal_fetch failed: {:#?}", e);
-                return Err(Error::new(ErrorKind::Other, e));
-            }
-        }
-    }
 }
