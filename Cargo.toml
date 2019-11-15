@@ -4,6 +4,8 @@ version = "0.1.0"
 authors = ["Christopher Brown <cb@skeptomai.com>"]
 
 [dependencies]
+log = "*"
+env_logger = "*"
 reqwest = "*"
 select = "*"
 scraper = "*"
