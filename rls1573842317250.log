@@ -1,7 +1,0 @@
-error: unexpected close delimiter: `)`
-   --> <stdin>:105:6
-    |
-105 |     })
-    |      ^ unexpected close delimiter
-
-[2019-11-15T18:38:47Z ERROR rls::actions::hover] racer_def: racer panicked
