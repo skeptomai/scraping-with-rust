@@ -6,7 +6,8 @@ extern crate tempfile;
 
 use log::{debug, error, info};
 use scoped_threadpool::Pool;
-use std::fs::File;
+use std::env;
+use std::fs;
 use std::io::{Error, ErrorKind, Result};
 use std::path::Path;
 use tempfile::Builder;
@@ -39,7 +40,7 @@ impl<'s> MP3ToFetch<'s> {
             Ok(mut response) => {
                 let fname = self.get_file_name(&response)?;
                 info!("internal_fetch would write {}", fname);
-                let mut f = File::create(fname.as_str())?;
+                let mut f = fs::File::create(fname.as_str())?;
                 info!("f is {:#?}", f);
 
                 let bytes_written: u64 = match response.copy_to(&mut f) {
@@ -78,14 +79,15 @@ impl<'s> MP3ToFetch<'s> {
 
 fn main() {
     env_logger::init();
-    nightscrape(WELCOME_TO_NIGHTVALE);
+    let args: Vec<String> = env::args().collect();
+    let dest_dir = &args[1];
+    nightscrape(WELCOME_TO_NIGHTVALE, dest_dir);
 }
 
-fn fetch(mp3s: &Vec<MP3ToFetch>) {
-    let part = &mp3s[0..9];
+fn fetch(mp3s: &[MP3ToFetch]) {
     let mut pool = Pool::new(num_cpus::get() as u32);
     pool.scoped(|scoped| {
-        for mp3 in part {
+        for mp3 in mp3s {
             scoped.execute(move || {
                 mp3.fetch_mp3();
             })
@@ -93,7 +95,7 @@ fn fetch(mp3s: &Vec<MP3ToFetch>) {
     })
 }
 
-fn nightscrape(url: &str) {
+fn nightscrape(url: &str, dest_dir: &str) {
     let mut resp = reqwest::get(url).unwrap();
     assert!(resp.status().is_success());
     let parsed = feed_rs::parser::parse(&mut resp).unwrap();
@@ -103,6 +105,16 @@ fn nightscrape(url: &str) {
     let d = dir.into_path();
     let pb = d.to_str().unwrap();
     info!("Path is {:#?}", pb);
+    info!("Destination is {:#?}", dest_dir);
+
+    match fs::metadata(dest_dir) {
+        Ok(md) => {
+            if md.is_dir() {
+                panic!("Dest dir {:#?} exists!", dest_dir);
+            }
+        }
+        Err(_) => {}
+    }
 
     let mp3s: Vec<MP3ToFetch> = parsed
         .entries
@@ -113,5 +125,10 @@ fn nightscrape(url: &str) {
         })
         .collect();
 
-    fetch(&mp3s);
+    fetch(&mp3s[0..3]);
+
+    match fs::rename(pb, dest_dir) {
+        Ok(_) => println!("renaming {:#?} to {:#?}", pb, dest_dir),
+        Err(e) => error!("failed rename #{:#?}", e),
+    };
 }
