@@ -4,13 +4,16 @@ extern crate env_logger;
 extern crate scoped_threadpool;
 extern crate tempfile;
 
-use log::{debug, error, info};
-use scoped_threadpool::Pool;
-use std::env;
-use std::fs;
-use std::io::{Error, ErrorKind, Result};
-use std::path::Path;
-use tempfile::Builder;
+use {
+    log::{debug, error, info},
+    scoped_threadpool::Pool,
+    std::{
+        env, fs,
+        io::{Error, ErrorKind, Result},
+        path::Path,
+    },
+    tempfile::Builder,
+};
 
 const WELCOME_TO_NIGHTVALE: &str = "http://feeds.nightvalepresents.com/welcometonightvalepodcast";
 const DIRECTORY_PREFIX: &str = "nightscrape-";
